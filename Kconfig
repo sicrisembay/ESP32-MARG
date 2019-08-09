@@ -1,0 +1,37 @@
+menu "MARG Configuration"
+
+  choice MARG_PINNED_TO_CORE_CHOICE
+    prompt "The cpu core which MARG run"
+    depends on !FREERTOS_UNICORE
+    help
+      Specify the cpu core to run MARG.
+    config MARG_PINNED_TO_CORE_0
+      bool "Core 0 (PRO CPU)"
+    config MARG_PINNED_TO_CORE_1
+      bool "Core 1 (APP CPU)"
+    config MARG_NO_CORE_AFFINITY
+      bool "No Affinity (PRO or APP CPU)"
+    depends on !FREERTOS_UNICORE
+  endchoice #MARG_PINNED_TO_CORE_CHOICE
+
+  choice MARG_SENSOR_CHOICE
+    prompt "9-axis sensor to use"
+    help
+      Specify the sensor
+    config MARG_SENSOR_MPU9250
+      bool "MPU9250"
+  endchoice #MARG_SENSOR_CHOICE
+
+  menu "MPU9250 Configuration"
+    visible if MARG_SENSOR_MPU9250
+    menu "MPU9250 I2C Configuration"
+      config MPU9250_SDA_PIN
+        int "MPU9250 I2C SDA Pin"
+        default 13
+      config MPU9250_SCL_PIN
+        int "MPU9250 I2C SCL Pin"
+        default 15
+    endmenu
+  endmenu #MPU9250 Configuration
+
+endmenu #MARG Configuration

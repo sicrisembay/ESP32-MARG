@@ -1,1 +1,4 @@
+menu "MARG Configuration"
 source ../../Kconfig
+source ../../sensor/mpu9250/Kconfig
+endmenu #MARG Configuration

@@ -5,6 +5,4 @@
 
 PROJECT_NAME := test
 
-
-
 include $(IDF_PATH)/make/project.mk

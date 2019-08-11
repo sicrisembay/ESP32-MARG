@@ -3,6 +3,7 @@
 
 typedef enum {
     MARG_NOERROR = 0,
+    MARG_ERROR_INIT,
     
     N_MARG_RET
 } marg_ret_t;

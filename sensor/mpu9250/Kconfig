@@ -1,0 +1,77 @@
+menu "MPU9250 Configuration"
+  depends on MARG_SENSOR_MPU9250
+  
+  menu "MPU9250 I2C Configuration"
+    config MPU9250_DEV_ADDR
+      hex "MPU9250 device address in I2C bus"
+      default 0x68
+    config MPU9250_I2C_PORT_NUM
+      int "I2C Master port used for MPU9250 Communication"
+      range 0 1
+      default 0
+    config MPU9250_I2C_CLK_FREQ
+      int "I2C Clock Frequency for MPU9250"
+      default 100000
+    config MPU9250_SDA_IO
+      int "MPU9250 I2C SDA IO"
+      default 13
+    config MPU9250_SCL_IO
+      int "MPU9250 I2C SCL IO"
+      default 15
+    config MPU9250_INT_IO
+      int "MPU9250 Interrupt IO"
+      default 14
+  endmenu
+  config MPU9250_SELFTEST_AUTORUN
+      bool "Perform self test on power-up"
+  
+  menu "MPU9250 Accelerometer Configuration"
+    choice MPU9250_ACCEL_FS
+      prompt "Select Full Scale"
+      config MPU9250_ACCEL_FS_2G
+        bool "+/-2G"
+      config MPU9250_ACCEL_FS_4G
+        bool "+/-4G"
+      config MPU9250_ACCEL_FS_8G
+        bool "+/-8G"
+      config MPU9250_ACCEL_FS_16G
+        bool "+/-16G"
+    endchoice #MPU9250_ACCEL_FS
+  endmenu
+  
+  menu "MPU9250 Gyroscope Configuration"
+    choice MPU9250_GYRO_FS
+      prompt "Select Full Scale"
+      config MPU9250_GYRO_FS_250DPS
+        bool "250 DPS"
+      config MPU9250_GYRO_FS_500DPS
+        bool "500 DPS"
+      config MPU9250_GYRO_FS_1000DPS
+        bool "1000 DPS"
+      config MPU9250_GYRO_FS_2000DPS
+        bool "2000 DPS"
+    endchoice
+  endmenu
+  
+  menu "AK8963 Magnetometer Configuration"
+    choice AK8963_OUTPUT_SIZE
+      prompt "Select ouput bit setting"
+      config AK8963_OUTPUT_16BIT
+        bool "16-BIT"
+      config AK8963_OUTPUT_14BIT
+        bool "14-BIT"
+    endchoice
+    
+    choice AK8963_OPERATION_MODE
+      prompt "Select Operation Mode"
+      config AK8963_SINGLE_MODE
+        bool "Single Measurement Mode"
+      config AK8963_CONT_MODE_8HZ
+        bool "8Hz Continuous Measurement"
+      config AK8963_CONT_MODE_100HZ
+        bool "100Hz Continuous Measurement"
+      config AK8963_EXT_TRIG_MODE
+        bool "External Triggered Measurement"
+    endchoice
+  endmenu
+endmenu #MPU9250 Configuration

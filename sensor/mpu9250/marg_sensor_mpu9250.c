@@ -10,6 +10,7 @@
 #include "math.h"
 
 #define MPU9250_DEBUG_INIT              (0)
+#define MPU9250_DEBUG_RAW_DATA          (0)
 #define MPU9250_DEBUG_DATA              (1)
 #define ENABLE_TIMING_TEST              (0)
 
@@ -108,7 +109,18 @@ enum Mscale {
 
 static const char *TAG = "mpu9250";
 static DRAM_ATTR TaskHandle_t mpu9250_task_handle = NULL;
+static TaskHandle_t task_handle_to_notify = NULL;
 static bool bInit = false;
+
+typedef struct {
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} dataXYZi16_t;
+
+static dataXYZi16_t accelRawData = {0};
+static dataXYZi16_t gyroRawData = {0};
+static dataXYZi16_t magRawData = {0};
 
 #ifdef CONFIG_MARG_STRICT_FIX16
 #error "TODO!"
@@ -116,13 +128,13 @@ static bool bInit = false;
 static float accelScale = 0.0f;
 static float gyroScale = 0.0f;
 static float magScale = 0.0f;
-static dataXYZ_t gyroBias = {0.0f};
-static dataXYZ_t accelBias = {0.0f};
-static dataXYZ_t magCal = {0.0f};
-static dataXYZ_t magBias = {0.0f};
-static dataXYZ_t accelRawData = {0.0};
-static dataXYZ_t gyroRawData = {0.0};
-static dataXYZ_t magRawData = {0.0};
+static dataXYZf_t gyroBias = {0.0f};
+static dataXYZf_t accelBias = {0.0f};
+static dataXYZf_t magCal = {0.0f};
+static dataXYZf_t magBias = {0.0f};
+static dataXYZf_t accelData = {0.0f};
+static dataXYZf_t gyroData = {0.0f};
+static dataXYZf_t magData = {0.0f};
 #endif /* #ifdef CONFIG_MARG_STRICT_FIX16 */
 
 static int _i2c_init(void)
@@ -316,7 +328,7 @@ static uint8_t _ak8963_read_byte(uint8_t reg_addr, esp_err_t * status)
 
 }
 
-static esp_err_t _mpu9250_run_selfTest(dataXYZ_t *pAccel, dataXYZ_t *pGyro)
+static esp_err_t _mpu9250_run_selfTest(dataXYZf_t *pAccel, dataXYZf_t *pGyro)
 {
 #ifdef CONFIG_MARG_STRICT_FIX16
     ESP_LOGE(TAG, "Fix16 calculation not yet supported!");
@@ -399,7 +411,7 @@ static esp_err_t _mpu9250_run_selfTest(dataXYZ_t *pAccel, dataXYZ_t *pGyro)
     return ESP_OK;
 }
 
-static esp_err_t _mpu9250_calGyroAccel(dataXYZ_t *pGyroBias, dataXYZ_t *pAccelBias)
+static esp_err_t _mpu9250_calGyroAccel(dataXYZf_t *pGyroBias, dataXYZf_t *pAccelBias)
 {
     uint8_t data[12] = {0}; /* data array to hold accelerometer and gyro x, y, z, data */
     uint16_t ii = 0;
@@ -611,7 +623,7 @@ static esp_err_t _mpu9250_init(void)
     return ESP_OK;
 }
 
-static esp_err_t _mpu9250_fetchData(dataXYZ_t *pGyroData, dataXYZ_t *pAccelData, dataXYZ_t *pMagData)
+static esp_err_t _mpu9250_fetchData(dataXYZi16_t *pGyroData, dataXYZi16_t *pAccelData, dataXYZi16_t *pMagData)
 {
     uint8_t rawData[21];  /* 6(Acc) + 2(Temp) + 6(Gyro) + 7(Mag + Sts2) */
     if((pGyroData == NULL) || (pAccelData == NULL)) {
@@ -630,14 +642,14 @@ static esp_err_t _mpu9250_fetchData(dataXYZ_t *pGyroData, dataXYZ_t *pAccelData,
 
     if(!(rawData[20] & 0x08)) {
         /* Overflow flag is clear */
-        pMagData->x = (float)(((int16_t)rawData[15] << 8) | rawData[14]);
-        pMagData->y = (float)(((int16_t)rawData[17] << 8) | rawData[16]);
-        pMagData->z = (float)(((int16_t)rawData[19] << 8) | rawData[18]);
+        pMagData->x = (int16_t)(((int16_t)rawData[15] << 8) | rawData[14]);
+        pMagData->y = (int16_t)(((int16_t)rawData[17] << 8) | rawData[16]);
+        pMagData->z = (int16_t)(((int16_t)rawData[19] << 8) | rawData[18]);
     }
     return ESP_OK;
 }
 
-static esp_err_t _ak8963_init(dataXYZ_t *pMagBias)
+static esp_err_t _ak8963_init(dataXYZf_t *pMagBias)
 {
     uint8_t rawData[3] = {0};
     /* Reset AK8963 */
@@ -690,8 +702,8 @@ static void _mpu9250_task(void *pArg)
 
     /***** Sensor self-check *************************************************/
 #ifdef CONFIG_MPU9250_SELFTEST_AUTORUN
-    dataXYZ_t accelSelfTest;
-    dataXYZ_t gyroSelfTest;
+    dataXYZf_t accelSelfTest;
+    dataXYZf_t gyroSelfTest;
     _mpu9250_run_selfTest(&accelSelfTest, &gyroSelfTest);
 #if(MPU9250_DEBUG_INIT == 1)
     ESP_LOGI(TAG, "Accel Trim delta (%f%%, %f%%, %f%%)", accelSelfTest.x, accelSelfTest.y, accelSelfTest.z);
@@ -721,12 +733,13 @@ static void _mpu9250_task(void *pArg)
     if(status) {
         ESP_LOGE(TAG, "AK8963 i2c error");
     }
-    if(AK8963_WHOIAM_VAL == tempVar) {
-        ESP_LOGI(TAG, "AK8963 found.");
-    } else {
+    if(AK8963_WHOIAM_VAL != tempVar) {
         ESP_LOGE(TAG, "AK8963 not found! ID: 0x%02X", tempVar);
         vTaskDelete(NULL);
     }
+#if(MPU9250_DEBUG_INIT == 1)
+    ESP_LOGI(TAG, "AK8963 found.");
+#endif /* #if(MPU9250_DEBUG_INIT == 1) */
 
     /* Init AK8963 Device */
     if(ESP_OK != _ak8963_init(&magBias)) {
@@ -773,11 +786,11 @@ static void _mpu9250_task(void *pArg)
 #endif /* ENABLE_TIMING_TEST */
             /* Read Sensor Data */
             _mpu9250_fetchData(&gyroRawData, &accelRawData, &magRawData);
-#if(MPU9250_DEBUG_DATA == 1)
+#if(MPU9250_DEBUG_RAW_DATA == 1)
             // test -->
             tempVar++;
             if((tempVar % 20) == 0) {
-                ESP_LOGI(TAG, "Accel (%f, %f, %f), Gyro (%f, %f, %f), Mag (%f, %f, %f)",
+                ESP_LOGI(TAG, "Accel Raw (%d, %d, %d), Gyro Raw (%d, %d, %d), Mag Raw (%d, %d, %d)",
                         accelRawData.x, accelRawData.y, accelRawData.z,
                         gyroRawData.x, gyroRawData.y, gyroRawData.z,
                         magRawData.x, magRawData.y, magRawData.z);
@@ -787,6 +800,33 @@ static void _mpu9250_task(void *pArg)
 #if(ENABLE_TIMING_TEST == 1)
             gpio_set_level(TIMING_IO_1, 1);
 #endif
+            /* Convert to proper units
+             * Acceleration: g
+             * Gyro: deg/second
+             * mag : milli gauss
+             */
+            accelData.x = (float)(accelRawData.x) * accelScale - accelBias.x;
+            accelData.y = (float)(accelRawData.y) * accelScale - accelBias.y;
+            accelData.z = (float)(accelRawData.z) * accelScale - accelBias.z;
+            gyroData.x = (float)(gyroRawData.x) * gyroScale;
+            gyroData.y = (float)(gyroRawData.y) * gyroScale;
+            gyroData.z = (float)(gyroRawData.z) * gyroScale;
+            /// TODO: mag conversion (implement first the mag cal function */
+#if(MPU9250_DEBUG_DATA == 1)
+            // test -->
+            tempVar++;
+            if((tempVar % 20) == 0) {
+                ESP_LOGI(TAG, "Accel (%f, %f, %f), Gyro (%f, %f, %f), Mag (%f, %f, %f)",
+                        accelData.x, accelData.y, accelData.z,
+                        gyroData.x, gyroData.y, gyroData.z,
+                        magData.x, magData.y, magData.z);
+            }
+            // <-- test
+#endif /* #if(MPU9250_DEBUG_DATA == 1) */
+            /* Notify task that new data is available */
+            if(task_handle_to_notify != NULL) {
+                xTaskNotifyGive(task_handle_to_notify);
+            }
         }
     }
 }
@@ -794,6 +834,8 @@ static void _mpu9250_task(void *pArg)
 int marg_sensor_init(void)
 {
     gpio_config_t io_conf;
+
+    task_handle_to_notify = NULL;
 
     /* initialize i2c interface */
     if(_i2c_init()) {
@@ -859,5 +901,66 @@ int marg_sensor_init(void)
 
 int marg_sensor_enable(void)
 {
-    return 0;
+    return (int)ESP_OK;
+}
+
+int marg_sensor_reg_notification(void * TskHdl)
+{
+    if(TskHdl == NULL) {
+        return (int)ESP_ERR_INVALID_ARG;
+    }
+    /* Sanity check. Only calling task can register */
+    if(TskHdl != xTaskGetCurrentTaskHandle()) {
+#if(MPU9250_DEBUG_INIT == 1)
+        ESP_LOGE(TAG, "%s invalid arg", __func__);
+#endif /* #if(MPU9250_DEBUG_INIT == 1) */
+        return (int)ESP_ERR_INVALID_ARG;
+    }
+    if((task_handle_to_notify != NULL) && (task_handle_to_notify != TskHdl)) {
+#if(MPU9250_DEBUG_INIT == 1)
+        ESP_LOGE(TAG, "%s: other task is already registerd!", __func__);
+#endif /* #if(MPU9250_DEBUG_INIT == 1) */
+        return (int)ESP_ERR_INVALID_STATE;
+    }
+    task_handle_to_notify = TskHdl;
+
+    return (int)ESP_OK;
+}
+
+int marg_sensor_unreg_notification(void * TskHdl)
+{
+    if(TskHdl == NULL) {
+#if(MPU9250_DEBUG_INIT == 1)
+        ESP_LOGE(TAG, "%s invalid arg", __func__);
+#endif /* #if(MPU9250_DEBUG_INIT == 1) */
+        return (int)ESP_ERR_INVALID_ARG;
+    }
+    if(task_handle_to_notify != TskHdl) {
+#if(MPU9250_DEBUG_INIT == 1)
+        ESP_LOGE(TAG, "%s: can not unregister other task!", __func__);
+#endif /* #if(MPU9250_DEBUG_INIT == 1) */
+        return (int)ESP_ERR_INVALID_ARG;
+    }
+    task_handle_to_notify = NULL;
+
+    return (int)ESP_OK;
+}
+
+int marg_sensor_get_data(dataXYZf_t *pAccelData, dataXYZf_t *pGyroData, dataXYZf_t *pMagData)
+{
+    if((pAccelData == NULL) || (pGyroData == NULL) || (pMagData == NULL)) {
+        return (int)ESP_ERR_INVALID_ARG;
+    }
+    /// TODO: can be optimized using memcpy
+    pAccelData->x = accelData.x;
+    pAccelData->y = accelData.y;
+    pAccelData->z = accelData.z;
+    pGyroData->x = gyroData.x;
+    pGyroData->y = gyroData.y;
+    pGyroData->z = gyroData.z;
+    pMagData->x = magData.x;
+    pMagData->y = magData.y;
+    pMagData->z = magData.z;
+
+    return (int)ESP_OK;
 }

@@ -46,6 +46,11 @@
 			<locationURI>PARENT-1-PROJECT_LOC/Kconfig</locationURI>
 		</link>
 		<link>
+			<name>components/marg/marg/algorithm</name>
+			<type>2</type>
+			<locationURI>PARENT-1-PROJECT_LOC/algorithm</locationURI>
+		</link>
+		<link>
 			<name>components/marg/marg/include</name>
 			<type>2</type>
 			<locationURI>PARENT-1-PROJECT_LOC/include</locationURI>

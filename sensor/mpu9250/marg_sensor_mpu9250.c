@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "../../include/marg.h"
 #include "../marg_sensor.h"
 #include "mpu9250_hw.h"
 #include "math.h"

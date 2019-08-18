@@ -15,6 +15,10 @@ endchoice #MARG_PINNED_TO_CORE_CHOICE
 config MARG_TASK_PRIORITY
   int "MARG Task Priority"
   default 5
+
+config MARG_STACK_SIZE
+  int "Stack Size of MARG Task"
+  default 1024
   
 config MARG_STRICT_FIX16
   bool "Use Fixed Point, Q16, calculation"

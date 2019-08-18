@@ -1,16 +1,6 @@
 #ifndef _MARG_SENSOR_H_
 #define _MARG_SENSOR_H_
 
-typedef struct {
-#ifdef CONFIG_MARG_STRICT_FIX16
-#error "To be implemented!"
-#else
-    float x;
-    float y;
-    float z;
-#endif /* #ifdef CONFIG_MARG_STRICT_FIX16 */
-} dataXYZf_t;
-
 int marg_sensor_init(void);
 int marg_sensor_reg_notification(void * TskHdl);
 int marg_sensor_unreg_notification(void * TskHdl);
